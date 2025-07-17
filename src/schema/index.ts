@@ -2,6 +2,7 @@ import { pgTable, text, serial, integer, boolean, timestamp, decimal, jsonb } fr
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { user } from "../routes/user";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -15,9 +16,57 @@ export const users = pgTable("users", {
   graduationYear: integer("graduation_year"),
   gradeLevel: text("grade_level").notNull(), // freshman, sophomore, junior, senior
   schoolName: text("school_name"),
-  interestedMajors: jsonb("interested_majors").default([]), // array of majors they're considering
   careerGoals: text("career_goals"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const resources = pgTable("resources", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  type: text("type").notNull(), // summer_program, competition, scholarship, internship, course, book, website
+  category: text("category").notNull(), // mathematics, science, computer-science, exploratory
+  minAge: integer("min_age"),
+  maxAge: integer("max_age"),
+  deadline: text("deadline"),
+  cost: text("cost"),
+  difficulty: text("difficulty").notNull(), // beginner, intermediate, advanced
+  url: text("url"),
+  isPremium: boolean("is_premium").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const eligibles = pgTable("eligibles", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique()
+});
+
+export const resourceEligibles = pgTable("resource_eligibles", {
+  id: serial("id").primaryKey(),
+  resourceId: integer("resource_id").references(() => resources.id).notNull(),
+  eligibleId: integer("eligible_id").references(() => eligibles.id).notNull()
+});
+
+export const tags = pgTable("tags", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique()
+});
+
+export const resourceTags = pgTable("resource_tags", {
+  id: serial("id").primaryKey(),
+  resourceId: integer("resource_id").references(() => resources.id).notNull(),
+  tagId: integer("tag_id").references(() => tags.id).notNull()
+});
+
+export const majors = pgTable("majors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique()
+});
+
+export const usersMajors = pgTable("user_majors", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  majorId: integer("major_id").references(() => majors.id).notNull()
 });
 
 export const resumes = pgTable("resumes", {
@@ -149,23 +198,6 @@ export const userMilestones = pgTable("user_milestones", {
   notes: text("notes"),
 });
 
-export const resources = pgTable("resources", {
-  id: serial("id").primaryKey(),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  type: text("type").notNull(), // summer_program, competition, scholarship, internship, course, book, website
-  category: text("category").notNull(), // mathematics, science, computer-science, exploratory
-  ageRange: text("age_range").notNull(),
-  eligibility: jsonb("eligibility").$type<string[]>().notNull(),
-  deadline: text("deadline"),
-  cost: text("cost"),
-  difficulty: text("difficulty").notNull(), // beginner, intermediate, advanced
-  url: text("url"),
-  tags: jsonb("tags").$type<string[]>().notNull(),
-  isPremium: boolean("is_premium").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
 export const userResourceViews = pgTable("user_resource_views", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id),
@@ -183,6 +215,11 @@ export const usersRelations = relations(users, ({ many }) => ({
   forumReplies: many(forumReplies),
   documents: many(documents),
   userResourceViews: many(userResourceViews),
+  usersMajors: many(usersMajors),
+}));
+
+export const majorsRelations = relations(majors, ({ many }) => ({
+  usersMajors: many(usersMajors),
 }));
 
 export const resumesRelations = relations(resumes, ({ one }) => ({
@@ -280,6 +317,16 @@ export const userMilestonesRelations = relations(userMilestones, ({ one }) => ({
 
 export const resourcesRelations = relations(resources, ({ many }) => ({
   userResourceViews: many(userResourceViews),
+  resourceEligibles: many(resourceEligibles),
+  resourceTags: many(resourceTags),
+}));
+
+export const eligiblesRelations = relations(eligibles, ({ many }) => ({
+  resourceEligibles: many(resourceEligibles),
+}));
+
+export const tagsRelations = relations(tags, ({ many }) => ({
+  resourceTags: many(resourceTags),
 }));
 
 export const userResourceViewsRelations = relations(userResourceViews, ({ one }) => ({
@@ -290,6 +337,39 @@ export const userResourceViewsRelations = relations(userResourceViews, ({ one })
   resource: one(resources, {
     fields: [userResourceViews.resourceId],
     references: [resources.id],
+  }),
+}));
+
+export const userMajorsRelations = relations(usersMajors, ({ one }) => ({
+  user: one(users, {
+    fields: [usersMajors.userId],
+    references: [users.id],
+  }),
+  majors: one(majors, {
+    fields: [usersMajors.majorId],
+    references: [majors.id],
+  }),
+}));
+
+export const resourceEligiblesRelations = relations(resourceEligibles, ({ one }) => ({
+  resources: one(resources, {
+    fields: [resourceEligibles.resourceId],
+    references: [resources.id],
+  }),
+  eligibles: one(eligibles, {
+    fields: [resourceEligibles.eligibleId],
+    references: [eligibles.id],
+  }),
+}));
+
+export const resourceTagsRelations = relations(resourceTags, ({ one }) => ({
+  resources: one(resources, {
+    fields: [resourceTags.resourceId],
+    references: [resources.id],
+  }),
+  tags: one(tags, {
+    fields: [resourceTags.tagId],
+    references: [tags.id],
   }),
 }));
 
@@ -361,6 +441,30 @@ export const insertUserResourceViewSchema = createInsertSchema(userResourceViews
   viewedAt: true,
 });
 
+export const insertMajorsSchema = createInsertSchema(majors).omit({
+  id: true
+});
+
+export const insertUsersMajorsSchema = createInsertSchema(usersMajors).omit({
+  id: true
+});
+
+export const insertEligiblesSchema = createInsertSchema(eligibles).omit({
+  id: true
+});
+
+export const insertResouceEligiblesSchema = createInsertSchema(resourceEligibles).omit({
+  id: true
+});
+
+export const insertTagsSchema = createInsertSchema(tags).omit({
+  id: true
+});
+
+export const insertResouceTagsSchema = createInsertSchema(resourceTags).omit({
+  id: true
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -390,3 +494,15 @@ export type Resource = typeof resources.$inferSelect;
 export type InsertResource = z.infer<typeof insertResourceSchema>;
 export type UserResourceView = typeof userResourceViews.$inferSelect;
 export type InsertUserResourceView = z.infer<typeof insertUserResourceViewSchema>;
+export type Major = typeof majors.$inferSelect;
+export type InsertMajor = z.infer<typeof insertMajorsSchema>;
+export type UsersMajor = typeof usersMajors.$inferSelect;
+export type InsertUsersMajor = z.infer<typeof insertUsersMajorsSchema>;
+export type Eligible = typeof eligibles.$inferSelect;
+export type InsertEligible = z.infer<typeof insertEligiblesSchema>;
+export type ResourceEligible = typeof resourceEligibles.$inferSelect;
+export type InsertResourceEligible = z.infer<typeof insertResouceEligiblesSchema>;
+export type Tag = typeof tags.$inferSelect;
+export type InsertTag = z.infer<typeof insertTagsSchema>;
+export type ResourceTag = typeof resourceTags.$inferSelect;
+export type InsertResourceTag = z.infer<typeof insertResouceTagsSchema>;

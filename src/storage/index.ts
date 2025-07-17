@@ -1,12 +1,13 @@
 import { 
   users, resumes, colleges, userColleges, feedback, deadlines, 
-  forumPosts, forumReplies, documents, resources, userResourceViews,
+  forumPosts, forumReplies, documents, resources, userResourceViews, majors, usersMajors,
   type User, type InsertUser, type Resume, type InsertResume,
   type College, type InsertCollege, type UserCollege, type InsertUserCollege,
   type Feedback, type InsertFeedback, type Deadline, type InsertDeadline,
   type ForumPost, type InsertForumPost, type ForumReply, type InsertForumReply,
   type Document, type InsertDocument, type Resource, type InsertResource,
-  type UserResourceView, type InsertUserResourceView
+  type UserResourceView, type InsertUserResourceView, type Major, type InsertMajor, 
+  type UsersMajor, type InsertUsersMajor
 } from "../schema";
 import { db } from "../db";
 import { eq, desc, asc, like, and, sql, count } from "drizzle-orm";
@@ -21,6 +22,11 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
+
+  // Major methods
+  getMajor(name: string): Promise<Major | undefined>;
+  createMajor(major: InsertMajor): Promise<Major>;
+  getAllMajors(): Promise<Major[]>;
 
   // Resume methods
   getResume(userId: number): Promise<Resume | undefined>;
@@ -64,6 +70,20 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  async getMajor(name: string): Promise<Major | undefined> {
+    const [major] = await db.select().from(majors).where(eq(majors.name, name));
+    return major || undefined;
+  }
+
+  async createMajor(insertMajor: InsertMajor): Promise<Major> {
+    const [major] = await db.insert(majors).values(insertMajor).returning();
+    return major;
+  }
+
+  async getAllMajors(): Promise<Major[]> {
+    return await db.select().from(majors).orderBy(asc(majors.name));
+  }
+
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
@@ -74,14 +94,54 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user || undefined;
+  async getUserByEmail(email: string): Promise<
+    (Omit<typeof users.$inferSelect, "usersMajors"> & {
+      interestedMajors: typeof majors.$inferSelect[];
+    }) | undefined
+  > {
+    const user = await db.query.users.findFirst({
+      where: (users, { eq }) => eq(users.email, email),
+      with: {
+        usersMajors: {
+          with: {
+            majors: true
+          }
+        }
+      }
+    });
+
+    if (!user) return undefined;
+
+    const interestedMajors = user.usersMajors.map((item) => item.majors);
+
+    const { usersMajors: _omit, ...userWithoutUsersMajors } = user;
+
+    return {
+      ...userWithoutUsersMajors,
+      interestedMajors,
+    };
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
+
+  async createUser(insertUser: InsertUser & { interestedMajors: number[] }): Promise<User> {
+    const { interestedMajors, ...userData } = insertUser;
+    const [user] = await db.insert(users).values(userData).returning();
+
+    if (interestedMajors?.length > 0) {
+      const userMajorValues = interestedMajors.map((majorId) => ({
+        userId: user.id,
+        majorId: majorId,
+      }));
+      await db.insert(usersMajors).values(userMajorValues);
+    }
+
     return user;
+  }
+
+  async deleteUser(email: string): Promise<boolean> {
+    const result = await db.delete(users)
+      .where(eq(users.email, email));
+    return result.rowCount ? result.rowCount > 0 : false;
   }
 
   async updateUser(id: number, updateUser: Partial<InsertUser>): Promise<User | undefined> {
@@ -105,6 +165,30 @@ export class DatabaseStorage implements IStorage {
       .where(eq(resumes.userId, userId))
       .returning();
     return resume || undefined;
+  }
+
+  async getResourceDetail(title: string): Promise<Resource | undefined> {
+    const result = await db
+      .select()
+      .from(resources)
+      .where(eq(resources.title, title))
+      .orderBy(asc(resources.title));
+
+    return result[0];
+  }
+
+  async getResources(limit = 50, search?: string, academic?: string, age?: number): Promise<Resource[]> {
+    return await db
+        .select()
+        .from(resources)
+        .where(like(resources.title, `%${search}%`))
+        .limit(limit)
+        .orderBy(asc(resources.title));
+  }
+
+  async createResource(insertResource: InsertResource): Promise<Resource> {
+    const [resourceItem] = await db.insert(resources).values(insertResource).returning();
+    return resourceItem;
   }
 
   async getColleges(limit = 50, search?: string): Promise<College[]> {

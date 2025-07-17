@@ -1,58 +1,17 @@
 import { Express, Request, Response } from "express";
-import { createServer, type Server } from "http";
+import { createServer } from "http";
 import { storage } from "../storage";
-import { insertUserSchema, insertResumeSchema, insertFeedbackSchema, insertDeadlineSchema, insertForumPostSchema, insertForumReplySchema } from "../schema";
-import { z } from "zod";
-
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
-
-const registerSchema = insertUserSchema.extend({
-  confirmPassword: z.string(),
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
+import { insertResumeSchema, insertFeedbackSchema, insertDeadlineSchema, insertForumPostSchema, insertForumReplySchema } from "../schema";
+import { auth } from "./auth";
+import { user } from "./user";
+import { major } from "./major";
+import { resource } from "./resource";
 
 export function registerRoutes(app: Express) {
-  // Authentication routes
-  app.post("/api/auth/register", async (request: Request, response: Response) => {
-    try {
-      const userData = registerSchema.parse(request.body);
-      const { confirmPassword, ...userToCreate } = userData;
-      
-      // Check if user already exists
-      const existingUser = await storage.getUserByEmail(userToCreate.email);
-      if (existingUser) {
-        response.status(400).json({ message: "User already exists" });
-      } else {
-        const user = await storage.createUser(userToCreate);
-        const { password, ...userWithoutPassword } = user;
-        
-        response.status(201).json({ user: userWithoutPassword });
-      }
-    } catch (error) {
-      response.status(400).json({ message: error instanceof Error ? error.message : "Registration failed" });
-    }
-  });
-
-  app.post("/api/auth/login", async (request: Request, response: Response) => {
-    try {
-      const { email, password } = loginSchema.parse(request.body);
-      
-      const user = await storage.getUserByEmail(email);
-      if (!user || user.password !== password) {
-        response.status(401).json({ message: "Invalid credentials" });
-      } else {
-        const { password: _, ...userWithoutPassword } = user;
-        response.json({ user: userWithoutPassword });
-      }
-    } catch (error) {
-      response.status(400).json({ message: error instanceof Error ? error.message : "Login failed" });
-    }
-  });
+  auth(app);
+  user(app);
+  major(app);
+  resource(app);
 
   // User routes
   app.get("/api/users/:id", async (request: Request, response: Response) => {
