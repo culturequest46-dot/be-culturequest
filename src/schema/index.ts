@@ -14,7 +14,7 @@ export const users = pgTable("users", {
   phone: text("phone"),
   gpa: decimal("gpa", { precision: 3, scale: 2 }),
   graduationYear: integer("graduation_year"),
-  gradeLevel: text("grade_level").notNull(), // freshman, sophomore, junior, senior
+  gradeLevel: integer("grade_level_id").notNull(),
   schoolName: text("school_name"),
   careerGoals: text("career_goals"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -59,6 +59,11 @@ export const resourceTags = pgTable("resource_tags", {
 });
 
 export const majors = pgTable("majors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique()
+});
+
+export const gradeLevels = pgTable("grade_levels", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique()
 });
@@ -445,6 +450,10 @@ export const insertMajorsSchema = createInsertSchema(majors).omit({
   id: true
 });
 
+export const insertGradeLevelSchema = createInsertSchema(gradeLevels).omit({
+  id: true
+});
+
 export const insertUsersMajorsSchema = createInsertSchema(usersMajors).omit({
   id: true
 });
@@ -506,3 +515,5 @@ export type Tag = typeof tags.$inferSelect;
 export type InsertTag = z.infer<typeof insertTagsSchema>;
 export type ResourceTag = typeof resourceTags.$inferSelect;
 export type InsertResourceTag = z.infer<typeof insertResouceTagsSchema>;
+export type GradeLevel = typeof gradeLevels.$inferSelect;
+export type InsertGradeLevel = z.infer<typeof insertGradeLevelSchema>;

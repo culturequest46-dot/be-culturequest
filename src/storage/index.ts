@@ -7,7 +7,9 @@ import {
   type ForumPost, type InsertForumPost, type ForumReply, type InsertForumReply,
   type Document, type InsertDocument, type Resource, type InsertResource,
   type UserResourceView, type InsertUserResourceView, type Major, type InsertMajor, 
-  type UsersMajor, type InsertUsersMajor
+  type UsersMajor, type InsertUsersMajor,
+  type GradeLevel, type InsertGradeLevel,
+  gradeLevels
 } from "../schema";
 import { db } from "../db";
 import { eq, desc, asc, like, and, sql, count } from "drizzle-orm";
@@ -63,6 +65,11 @@ export interface IStorage {
   getUserDocuments(userId: number): Promise<Document[]>;
   createDocument(document: InsertDocument): Promise<Document>;
 
+  // Grade Level methods
+  createGradeLevel(gradeLevel: InsertGradeLevel): Promise<GradeLevel>;
+  getAllGradeLevel(): Promise<GradeLevel[]>;
+  getGradeLevel(name: string): Promise<GradeLevel | undefined>;
+
   // Resource methods (temporarily handled frontend-only)
   // getResources(category?: string, ageRange?: string, limit?: number): Promise<Resource[]>;
   // getResource(id: number): Promise<Resource | undefined>;
@@ -70,6 +77,20 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  async createGradeLevel(insertGradeLevel: InsertGradeLevel): Promise<GradeLevel> {
+    const [gradeLevel] = await db.insert(gradeLevels).values(insertGradeLevel).returning();
+    return gradeLevel;
+  }
+
+  async getAllGradeLevel(): Promise<GradeLevel[]> {
+    return await db.select().from(gradeLevels).orderBy(asc(gradeLevels.name));
+  }
+
+  async getGradeLevel(name: string): Promise<GradeLevel | undefined> {
+    const [gradeLevel] = await db.select().from(gradeLevels).where(eq(gradeLevels.name, name));
+    return gradeLevel || undefined;
+  }
+
   async getMajor(name: string): Promise<Major | undefined> {
     const [major] = await db.select().from(majors).where(eq(majors.name, name));
     return major || undefined;

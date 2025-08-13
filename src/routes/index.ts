@@ -6,12 +6,14 @@ import { auth } from "./auth";
 import { user } from "./user";
 import { major } from "./major";
 import { resource } from "./resource";
+import gradeLevel from "./gradeLevel";
 
 export function registerRoutes(app: Express) {
   auth(app);
   user(app);
   major(app);
   resource(app);
+  gradeLevel(app);
 
   // User routes
   app.get("/api/users/:id", async (request: Request, response: Response) => {
